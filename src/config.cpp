@@ -53,3 +53,14 @@ HostConfig LoadConfig()
 
     return { hotkey, overlayHotkey, targetExe, enableDepth != 0 };
 }
+
+void SaveConfig(const HostConfig& config)
+{
+    wchar_t executable[32768]{};
+    GetModuleFileNameW(nullptr, executable, static_cast<DWORD>(std::size(executable)));
+    const std::wstring path = std::wstring(executable).substr(0, std::wstring(executable).find_last_of(L"\\/") + 1)
+                              + L"RobloxShadeHost.ini";
+
+    WritePrivateProfileStringW(L"Settings", L"TargetExecutable", config.targetExecutable.c_str(), path.c_str());
+    WritePrivateProfileStringW(L"Settings", L"EnableDepth", config.enableDepth ? L"1" : L"0", path.c_str());
+}

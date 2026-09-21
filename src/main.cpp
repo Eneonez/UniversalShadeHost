@@ -10,6 +10,8 @@
 #include "state.h"
 
 #include <cstdio>
+#include <iostream>
+#include <string>
 
 State g;
 
@@ -17,7 +19,29 @@ namespace
 {
 int Run()
 {
-    const auto config = LoadConfig();
+    auto config = LoadConfig();
+
+    std::wcout << L"Current target: " << config.targetExecutable << L"\n";
+    std::wcout << L"Press Enter to keep, or type new executable: ";
+    std::wstring newExe;
+    std::getline(std::wcin, newExe);
+    if (!newExe.empty())
+        config.targetExecutable = newExe;
+
+    std::wcout << L"Enable Depth AI for 3D shaders? (Y/N, current " << (config.enableDepth ? L"Y" : L"N") << L"): ";
+    std::wstring depthAns;
+    std::getline(std::wcin, depthAns);
+    if (!depthAns.empty())
+    {
+        if (depthAns == L"y" || depthAns == L"Y" || depthAns == L"1")
+            config.enableDepth = true;
+        else if (depthAns == L"n" || depthAns == L"N" || depthAns == L"0")
+            config.enableDepth = false;
+    }
+    
+    std::wcout << L"\n";
+    SaveConfig(config);
+
     if (!GraphicsCaptureSession::IsSupported())
     {
         std::puts("Windows Graphics Capture is not supported on this system.");
