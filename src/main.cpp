@@ -12,6 +12,48 @@
 #include <cstdio>
 #include <iostream>
 #include <string>
+#include <vector>
+#include <tlhelp32.h>
+
+struct WindowInfo {
+    HWND hwnd;
+    std::wstring title;
+    std::wstring exeName;
+};
+
+std::vector<WindowInfo> GetVisibleWindows() {
+    std::vector<WindowInfo> windows;
+    EnumWindows([](HWND hwnd, LPARAM param) -> BOOL {
+        if (IsWindowVisible(hwnd) && !GetWindow(hwnd, GW_OWNER)) {
+            wchar_t title[256];
+            GetWindowTextW(hwnd, title, sizeof(title)/sizeof(wchar_t));
+            if (wcslen(title) > 0) {
+                DWORD pid;
+                GetWindowThreadProcessId(hwnd, &pid);
+                HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+                std::wstring exeName = L"Unknown";
+                if (hSnapshot != INVALID_HANDLE_VALUE) {
+                    PROCESSENTRY32W pe;
+                    pe.dwSize = sizeof(PROCESSENTRY32W);
+                    if (Process32FirstW(hSnapshot, &pe)) {
+                        do {
+                            if (pe.th32ProcessID == pid) {
+                                exeName = pe.szExeFile;
+                                break;
+                            }
+                        } while (Process32NextW(hSnapshot, &pe));
+                    }
+                    CloseHandle(hSnapshot);
+                }
+                
+                auto& vec = *reinterpret_cast<std::vector<WindowInfo>*>(param);
+                vec.push_back({hwnd, title, exeName});
+            }
+        }
+        return TRUE;
+    }, reinterpret_cast<LPARAM>(&windows));
+    return windows;
+}
 
 State g;
 
@@ -21,12 +63,36 @@ int Run()
 {
     auto config = LoadConfig();
 
-    std::wcout << L"Current target: " << config.targetExecutable << L"\n";
-    std::wcout << L"Press Enter to keep, or type new executable: ";
-    std::wstring newExe;
-    std::getline(std::wcin, newExe);
-    if (!newExe.empty())
-        config.targetExecutable = newExe;
+    while(true) {
+        std::wcout << L"Current target: " << config.targetExecutable << L"\n";
+        std::wcout << L"Press Enter to keep, type 'list' to view open games, or type new executable: ";
+        std::wstring newExe;
+        std::getline(std::wcin, newExe);
+        if (newExe.empty()) {
+            break;
+        } else if (newExe == L"list" || newExe == L"?") {
+            auto windows = GetVisibleWindows();
+            std::wcout << L"\n--- Open Windows ---\n";
+            for (size_t i = 0; i < windows.size(); ++i) {
+                std::wcout << L"[" << i + 1 << L"] " << windows[i].exeName << L" - " << windows[i].title << L"\n";
+            }
+            std::wcout << L"Enter the number to select, or 0 to cancel: ";
+            std::wstring numStr;
+            std::getline(std::wcin, numStr);
+            try {
+                int idx = std::stoi(numStr) - 1;
+                if (idx >= 0 && idx < windows.size()) {
+                    config.targetExecutable = windows[idx].exeName;
+                    std::wcout << L"Selected: " << config.targetExecutable << L"\n\n";
+                    break;
+                }
+            } catch (...) {}
+            std::wcout << L"\n";
+        } else {
+            config.targetExecutable = newExe;
+            break;
+        }
+    }
 
     std::wcout << L"Enable Depth AI for 3D shaders? (Y/N, current " << (config.enableDepth ? L"Y" : L"N") << L"): ";
     std::wstring depthAns;
